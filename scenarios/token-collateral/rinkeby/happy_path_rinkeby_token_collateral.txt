@@ -1,0 +1,256 @@
+var Web3 = require('web3');
+var util = require('ethereumjs-util');
+var tx = require('ethereumjs-tx');
+var lightwallet = require('eth-lightwallet');
+var txutils = lightwallet.txutils;
+var abijs = require('ethereumjs-abi')
+var web3Rinkeby = new Web3(new Web3.providers.HttpProvider('https://rinkeby.infura.io/'))
+
+var investorAddress = ''
+var investorPrivateKey = ''
+var bondIssuerAddress = ''
+var bondIssuerPrivateKey = ''
+
+var bondFaceValueInGBP = 1000
+loanTransferTimeoutInSeconds = 60
+
+numberOfCouponPayments = 3
+couponPaymentPeriodInSeconds = 60
+couponPaymentInGBP = 50
+
+totalNumberOfDebtTokens = '1000000000000000000'
+debtTokenName = 'Smart Bond Token5'
+debtTokenSymbol = 'SBT5'
+
+var th;
+function sendRaw(rawTx, privateKey) {
+    var privateKey = new Buffer(privateKey, 'hex');
+    var transaction = new tx(rawTx);
+    transaction.sign(privateKey);
+    var serializedTx = transaction.serialize().toString('hex');
+    web3Rinkeby.eth.sendRawTransaction(
+    '0x' + serializedTx, function(err, result) {
+        if(err) {
+            console.log(err);
+        } else {
+            console.log(result);
+            th = result;
+        }
+    });
+}
+
+Steps 1 - 4 are prerequisites and can be run just once
+1) Create Currency Rates Provider and set GBP rate (for oraclized rate provider - see oraclized_currency_rates_rinkeby.txt)
+var exchangeRatesAbiText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/SettableCurrencyRates.abi').toString()
+var exchangeRatesAbi = JSON.parse(exchangeRatesAbiText)
+var exchangeRatesBytecodeText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/SettableCurrencyRates.bin').toString()
+var exchangeRatesBytecode = '0x' + exchangeRatesBytecodeText
+var ExchangeRates = web3Rinkeby.eth.contract(exchangeRatesAbi)
+var parameterTypes = []
+var parameterValues = []
+var encoded = abijs.rawEncode(parameterTypes, parameterValues)
+var params = encoded.toString('hex')
+var rawTx = {
+    nonce: web3Rinkeby.toHex(web3Rinkeby.eth.getTransactionCount(bondIssuerAddress)),
+    gasLimit: web3Rinkeby.toHex(5000000),
+    gasPrice: web3Rinkeby.toHex(40000000000),
+    data: exchangeRatesBytecode + params
+}
+sendRaw(rawTx, bondIssuerPrivateKey)
+web3Rinkeby.eth.getTransactionReceipt(th)
+var exchangeRatesDeployedContractAddress = web3Rinkeby.eth.getTransactionReceipt(th).contractAddress
+var exchangeRatesContractInstance = ExchangeRates.at(exchangeRatesDeployedContractAddress)
+#0x3c4fc6a4826054dc4a5718ac822a1eb86c7f36fd
+
+var txOptions = {
+    nonce: web3Rinkeby.toHex(web3Rinkeby.eth.getTransactionCount(bondIssuerAddress)),
+    gasLimit: web3Rinkeby.toHex(1600000),
+    gasPrice: web3Rinkeby.toHex(20000000000),
+    to: exchangeRatesContractInstance.address
+}
+var rawTx = txutils.functionTx(exchangeRatesAbi, 'setCurrencyRate', ['GBP', '1000000000000000'], txOptions);
+sendRaw(rawTx, bondIssuerPrivateKey)
+web3Rinkeby.eth.getTransactionReceipt(th)
+
+exchangeRatesContractInstance.getCurrencyRate('GBP').toNumber()
+
+2) Create Token Rates Provider. Currently only SettableTokenRates provider is available.
+var exchangeTokenRatesAbiText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/SettableTokenRates.abi').toString()
+var exchangeTokenRatesAbi = JSON.parse(exchangeTokenRatesAbiText)
+var exchangeTokenRatesBytecodeText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/SettableTokenRates.bin').toString()
+var exchangeTokenRatesBytecode = '0x' + exchangeTokenRatesBytecodeText
+var ExchangeTokenRates = web3Rinkeby.eth.contract(exchangeTokenRatesAbi)
+var parameterTypes = []
+var parameterValues = []
+var encoded = abijs.rawEncode(parameterTypes, parameterValues)
+var params = encoded.toString('hex')
+var rawTx = {
+    nonce: web3Rinkeby.toHex(web3Rinkeby.eth.getTransactionCount(bondIssuerAddress)),
+    gasLimit: web3Rinkeby.toHex(5000000),
+    gasPrice: web3Rinkeby.toHex(40000000000),
+    data: exchangeTokenRatesBytecode + params
+}
+sendRaw(rawTx, bondIssuerPrivateKey)
+web3Rinkeby.eth.getTransactionReceipt(th)
+var exchangeTokenRatesDeployedContract = web3Rinkeby.eth.getTransactionReceipt(th).contractAddress
+var exchangeTokenRatesContractInstance = ExchangeTokenRates.at(exchangeTokenRatesDeployedContract)
+#
+
+3) Create Mintable Collateral Token
+var mintableCollateralTokenAbiText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/MintableColTok.abi').toString()
+var mintableCollateralTokenAbi = JSON.parse(mintableCollateralTokenAbiText)
+var mintableCollateralTokenBytecodeText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/MintableColTok.bin').toString()
+var mintableCollateralTokenBytecode = '0x' + mintableCollateralTokenBytecodeText
+var MintableCollateralToken = web3Rinkeby.eth.contract(mintableCollateralTokenAbi)
+
+var parameterTypes = ["string", "string"]
+var parameterValues = ["Mintable Collateral Token", "MCT"]
+var encoded = abijs.rawEncode(parameterTypes, parameterValues)
+var params = encoded.toString('hex')
+var rawTx = {
+    nonce: web3Rinkeby.toHex(web3Rinkeby.eth.getTransactionCount(bondIssuerAddress)),
+    gasLimit: web3Rinkeby.toHex(5000000),
+    gasPrice: web3Rinkeby.toHex(40000000000),
+    data: mintableCollateralTokenBytecode + params
+}
+sendRaw(rawTx, bondIssuerPrivateKey)
+web3Rinkeby.eth.getTransactionReceipt(th)
+var mintableCollateralTokenDeployedContractAddress = web3Rinkeby.eth.getTransactionReceipt(th).contractAddress
+var mintableCollateralTokenContractInstance = MintableCollateralToken.at(mintableCollateralTokenDeployedContractAddress)
+#
+
+mintableCollateralTokenContractInstance.balanceOf(bondIssuerAddress).toNumber()
+
+4) Create Smart Bond Register
+var smartBondRegisterAbiText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/SmartBondRegister.abi').toString()
+var smartBondRegisterAbi = JSON.parse(smartBondRegisterAbiText)
+var smartBondRegisterBytecodeText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/SmartBondRegister.bin').toString()
+var smartBondRegisterBytecode = '0x' + smartBondRegisterBytecodeText
+var SmartBondRegister = web3Rinkeby.eth.contract(smartBondRegisterAbi)
+
+var parameterTypes = []
+var parameterValues = []
+var encoded = abijs.rawEncode(parameterTypes, parameterValues)
+var params = encoded.toString('hex')
+var rawTx = {
+    nonce: web3Rinkeby.toHex(web3Rinkeby.eth.getTransactionCount(bondIssuerAddress)),
+    gasLimit: web3Rinkeby.toHex(5000000),
+    gasPrice: web3Rinkeby.toHex(40000000000),
+    data: smartBondRegisterBytecode + params
+}
+sendRaw(rawTx, bondIssuerPrivateKey)
+web3Rinkeby.eth.getTransactionReceipt(th)
+var smartBondRegisterDeployedContractAddress = web3Rinkeby.eth.getTransactionReceipt(th).contractAddress
+var smartBondRegisterContractInstance = SmartBondRegister.at(smartBondRegisterDeployedContractAddress)
+#
+
+5) Set rate of mintable collateral token
+var txOptions = {
+    nonce: web3Rinkeby.toHex(web3Rinkeby.eth.getTransactionCount(bondIssuerAddress)),
+    gasLimit: web3Rinkeby.toHex(1600000),
+    gasPrice: web3Rinkeby.toHex(20000000000),
+    to: exchangeTokenRatesContractInstance.address
+}
+var rawTx = txutils.functionTx(exchangeTokenRatesAbi, 'setTokenRate', [mintableCollateralTokenContractInstance.address, '1000000000000000000'], txOptions);
+sendRaw(rawTx, bondIssuerPrivateKey)
+web3Rinkeby.eth.getTransactionReceipt(th)
+exchangeTokenRatesContractInstance.getTokenRate(mintableCollateralTokenContractInstance.address).toNumber()
+
+6) Create Smart Bond
+var smartBondAbiText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/SmartBond.abi').toString()
+var smartBondAbi = JSON.parse(smartBondAbiText)
+var smartBondBytecodeText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/SmartBond.bin').toString()
+var smartBondBytecode = '0x' + smartBondBytecodeText
+var SmartBond = web3Rinkeby.eth.contract(smartBondAbi)
+var contractId = '2236'
+var parameterTypes = ["address", "address",    "string", "uint256",    "uint256", "uint256", "uint256",    "address",    "address", "uint256",    "address", "address",    "string", "string", "uint256"]
+var parameterValues = [bondIssuerAddress, investorAddress,    "GBP", "1000",    3, 60, 50,    mintableCollateralTokenContractInstance.address,    smartBondRegisterContractInstance.address, contractId,    exchangeRatesContractInstance.address, exchangeTokenRatesContractInstance.address,    "Smart Bond Token2", "SBT2", "1000000000000000000000"]
+var encoded = abijs.rawEncode(parameterTypes, parameterValues)
+var params = encoded.toString('hex')
+var rawTx = {
+    nonce: web3Rinkeby.toHex(web3Rinkeby.eth.getTransactionCount(bondIssuerAddress)),
+    gasLimit: web3Rinkeby.toHex(5000000),
+    gasPrice: web3Rinkeby.toHex(40000000000),
+    data: smartBondBytecode + params
+}
+sendRaw(rawTx, bondIssuerPrivateKey)
+web3Rinkeby.eth.getTransactionReceipt(th)
+var smartBondDeployedContractAddress = web3Rinkeby.eth.getTransactionReceipt(th).contractAddress
+var smartBondContractInstance = SmartBond.at(smartBondDeployedContractAddress)
+smartBondRegisterContractInstance.getSmartBond(contractId)
+smartBondContractInstance.minNumberOfCollateralTokens().toNumber()
+smartBondContractInstance.balanceOf(smartBondContractInstance.address).toNumber()
+
+7) Update currency rate in the Currency Rates Provider
+
+8) Check balance of collateral tokens belonging to bond issuer
+mintableCollateralTokenContractInstance.balanceOf(bondIssuerAddress).toNumber()
+
+9) Check balance of collateral tokens belonging to Smart Bond
+mintableCollateralTokenContractInstance.balanceOf(smartBondContractInstance.address).toNumber()
+
+10) Mint collateral tokens; each 'mint' call mints 10000000000000000000 tokens for the caller (bond issuer)
+var txOptions = {
+    nonce: web3Rinkeby.toHex(web3Rinkeby.eth.getTransactionCount(bondIssuerAddress)),
+    gasLimit: web3Rinkeby.toHex(1600000),
+    gasPrice: web3Rinkeby.toHex(20000000000),
+    to: mintableCollateralTokenContractInstance.address
+}
+var rawTx = txutils.functionTx(mintableCollateralTokenAbi, 'mint', [], txOptions);
+sendRaw(rawTx, bondIssuerPrivateKey)
+web3Rinkeby.eth.getTransactionReceipt(th)
+mintableCollateralTokenContractInstance.balanceOf(bondIssuerAddress).toNumber()
+
+11) Update number of collateral tokens according current rate of collateral token
+var txOptions = {
+    nonce: web3Rinkeby.toHex(web3Rinkeby.eth.getTransactionCount(bondIssuerAddress)),
+    gasLimit: web3Rinkeby.toHex(1600000),
+    gasPrice: web3Rinkeby.toHex(20000000000),
+    to: smartBondContractInstance.address
+}
+var rawTx = txutils.functionTx(smartBondAbi, 'updateMinAmountOfCollateral', [], txOptions);
+sendRaw(rawTx, bondIssuerPrivateKey)
+web3Rinkeby.eth.getTransactionReceipt(th)
+smartBondContractInstance.minNumberOfCollateralTokens().toNumber()
+
+12) Transfer collateral tokens to Smart Bond
+var tokensToTransfer = smartBondContractInstance.minNumberOfCollateralTokens().toNumber()
+
+var txOptions = {
+    nonce: web3Rinkeby.toHex(web3Rinkeby.eth.getTransactionCount(bondIssuerAddress)),
+    gasLimit: web3Rinkeby.toHex(1600000),
+    gasPrice: web3Rinkeby.toHex(20000000000),
+    to: mintableCollateralTokenContractInstance.address
+}
+var rawTx = txutils.functionTx(mintableCollateralTokenAbi, 'transfer', [smartBondContractInstance.address, tokensToTransfer], txOptions);
+sendRaw(rawTx, bondIssuerPrivateKey)
+web3Rinkeby.eth.getTransactionReceipt(th)
+
+13) Check balance of collateral tokens belonging to bond issuer and Smart Bond
+mintableCollateralTokenContractInstance.balanceOf(bondIssuerAddress).toNumber()
+mintableCollateralTokenContractInstance.balanceOf(smartBondContractInstance.address).toNumber()
+
+14) Transfer loan (1000 GBP * GBP rate in Wei) from investor to Smart Bond
+web3Rinkeby.eth.getBalance(investorAddress).toNumber()
+web3Rinkeby.eth.getBalance(bondIssuerAddress).toNumber()
+
+Update currency rate in the Currency Rates Provider
+
+Transfer using metamask
+
+15) Check balance of debt tokens belonging to investor
+smartBondContractInstance.balanceOf(smartBondContractInstance.investorAddress()).toNumber()
+smartBondContractInstance.balanceOf(smartBondContractInstance.address).toNumber()
+
+16) Transfer full repayment + 100 GBP (1250 GBP * GBP rate in Wei) from bond issuer to Smart Bond
+Transfer using metamask
+
+web3Rinkeby.eth.getBalance(investorAddress).toNumber()
+web3Rinkeby.eth.getBalance(bondIssuerAddress).toNumber()
+
+17) Check balance of debt tokens belonging to investor
+smartBondContractInstance.balanceOf(smartBondContractInstance.investorAddress()).toNumber()
+
+18) Check balance of collateral tokens belonging to bond issuer and Smart Bond
+mintableCollateralTokenContractInstance.balanceOf(bondIssuerAddress).toNumber()
+mintableCollateralTokenContractInstance.balanceOf(smartBondContractInstance.address).toNumber()

@@ -1,0 +1,214 @@
+var Web3 = require('web3');
+var util = require('ethereumjs-util');
+var tx = require('ethereumjs-tx');
+var lightwallet = require('eth-lightwallet');
+var txutils = lightwallet.txutils;
+var abijs = require('ethereumjs-abi')
+var web3Rinkeby = new Web3(new Web3.providers.HttpProvider('https://rinkeby.infura.io/'))
+
+var bondFaceValueInGBP = 1000
+loanTransferTimeoutInSeconds = 60
+
+numberOfCouponPayments = 3
+couponPaymentPeriodInSeconds = 60
+couponPaymentInGBP = 50
+
+totalNumberOfDebtTokens = '1000000000000000000'
+debtTokenName = 'Smart Bond Token5'
+debtTokenSymbol = 'SBT5'
+
+function sendRaw(rawTx, privateKey) {
+    var privateKey = new Buffer(privateKey, 'hex');
+    var transaction = new tx(rawTx);
+    transaction.sign(privateKey);
+    var serializedTx = transaction.serialize().toString('hex');
+    return web3Rinkeby.eth.sendRawTransaction('0x' + serializedTx);
+};
+
+function waitForTransactionCompletion(txHash) {
+    const interval = 500;
+    const transactionReceiptAsync = function(resolve, reject) {
+        web3Rinkeby.eth.getTransactionReceipt(txHash, (error, receipt) => {
+            if (error) {
+                console.log('Rejected');
+                reject(error);
+            } else if (receipt == null) {
+                setTimeout(
+                    () => transactionReceiptAsync(resolve, reject), interval
+                );
+            } else {
+                resolve(receipt);
+            }
+        });
+    };
+    return new Promise(transactionReceiptAsync);
+};
+
+Steps 1 - 2 are prerequisites and can be run just once
+
+1) Create Currency Rates Provider and set GBP rate (for oraclized rate provider - see oraclized_currency_rates_rinkeby.txt)
+# see oraclized_currency_rates_coinbase_rinkeby.txt or oraclized_currency_rates_kraken_rinkeby.txt
+exchangeRatesContractInstance.getCurrencyRate('GBP').toNumber()
+
+2) Create Smart Bond Register
+var smartBondRegisterAbiText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/SmartBondRegister.abi').toString()
+var smartBondRegisterAbi = JSON.parse(smartBondRegisterAbiText)
+var smartBondRegisterBytecodeText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/SmartBondRegister.bin').toString()
+var smartBondRegisterBytecode = '0x' + smartBondRegisterBytecodeText
+var SmartBondRegister = web3Rinkeby.eth.contract(smartBondRegisterAbi)
+
+var parameterTypes = []
+var parameterValues = []
+var encoded = abijs.rawEncode(parameterTypes, parameterValues)
+var params = encoded.toString('hex')
+var rawTx = {
+    nonce: web3Rinkeby.toHex(web3Rinkeby.eth.getTransactionCount(bondIssuerAddress)),
+    gasLimit: web3Rinkeby.toHex(5000000),
+    gasPrice: web3Rinkeby.toHex(40000000000),
+    data: smartBondRegisterBytecode + params
+}
+
+var smartBondRegisterDeployedContractAddress;
+var smartBondRegisterContractInstance;
+
+var txHash = sendRaw(rawTx, bondIssuerPrivateKey)
+waitForTransactionCompletion(txHash).
+then(
+    function(receipt) {
+        smartBondRegisterDeployedContractAddress = receipt.contractAddress
+        console.log('smartBondRegisterDeployedContractAddress: ' + smartBondRegisterDeployedContractAddress);
+        smartBondRegisterContractInstance = SmartBondRegister.at(smartBondRegisterDeployedContractAddress)
+    }
+)
+#
+
+3) Create Smart Bond
+var smartBondAbiText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/SmartBondMultipleInvestors.abi').toString()
+var smartBondAbi = JSON.parse(smartBondAbiText)
+var smartBondBytecodeText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/SmartBondMultipleInvestors.bin').toString()
+var smartBondBytecode = '0x' + smartBondBytecodeText
+var SmartBond = web3Rinkeby.eth.contract(smartBondAbi)
+var contractId = '1276'
+var parameterTypes = ["address", "uint8", "uint256",    "string", "uint256",    "uint256", "uint256", "uint256",    "address", "string",    "address",    "string", "string", "uint256"]
+var parameterValues = [bondIssuerAddress, "50", "60",    "GBP", "1000",    "3", "60", "50",    smartBondRegisterContractInstance.address, contractId,    exchangeRatesContractInstance.address,    "Smart Bond Token2", "SBT2", "1000000000000000000000"]
+var encoded = abijs.rawEncode(parameterTypes, parameterValues)
+var params = encoded.toString('hex')
+var rawTx = {
+    nonce: web3Rinkeby.toHex(web3Rinkeby.eth.getTransactionCount(bondIssuerAddress)),
+    gasLimit: web3Rinkeby.toHex(5000000),
+    gasPrice: web3Rinkeby.toHex(40000000000),
+    data: smartBondBytecode + params
+}
+
+var smartBondDeployedContractAddress;
+var smartBondContractInstance;
+
+var txHash = sendRaw(rawTx, bondIssuerPrivateKey)
+waitForTransactionCompletion(txHash).
+then(
+    function(receipt) {
+        smartBondDeployedContractAddress = receipt.contractAddress
+        smartBondContractInstance = SmartBond.at(smartBondDeployedContractAddress)
+        console.log('smartBond address: ' + smartBondRegisterContractInstance.getSmartBond(contractId));
+        console.log('balanceOf smartBond: ' + smartBondContractInstance.balanceOf(smartBondContractInstance.address).toNumber());
+    },
+    function(error) {
+        console.log('Error: ' + error);
+    }
+)
+
+4) Update currency rate in the Currency Rates Provider
+
+5) Check balance of Smart Bond
+web3Rinkeby.eth.getBalance(smartBondContractInstance.address).toNumber()
+
+6) Update amount of collateral wei according current rate
+var txOptions = {
+    nonce: web3Rinkeby.toHex(web3Rinkeby.eth.getTransactionCount(bondIssuerAddress)),
+    gasLimit: web3Rinkeby.toHex(1600000),
+    gasPrice: web3Rinkeby.toHex(20000000000),
+    to: smartBondContractInstance.address
+}
+var rawTx = txutils.functionTx(smartBondAbi, 'updateMinAmountOfCollateral', [], txOptions);
+sendRaw(rawTx, bondIssuerPrivateKey)
+web3Rinkeby.eth.getTransactionReceipt(th)
+smartBondContractInstance.minAmountOfCollateralWei().toNumber()
+
+7) Transfer collateral (1000 GBP * GBP rate in Wei * 1.25) ether to Smart Bond
+Transfer using metamask, set data = '1'
+
+8) Check balance of bond issuer and Smart Bond
+web3Rinkeby.eth.getBalance(bondIssuerAddress).toNumber()
+web3Rinkeby.eth.getBalance(smartBondContractInstance.address).toNumber()
+
+9) Transfer loan (1000 GBP * GBP rate in Wei) from investor to Smart Bond
+web3Rinkeby.eth.getBalance(investorAddress).toNumber()
+web3Rinkeby.eth.getBalance(bondIssuerAddress).toNumber()
+
+Update currency rate in the Currency Rates Provider
+
+Transfer using metamask
+
+10) Check balance of debt tokens belonging to investor
+smartBondContractInstance.balanceOf(smartBondContractInstance.investorAddress()).toNumber()
+smartBondContractInstance.balanceOf(smartBondContractInstance.address).toNumber()
+
+11) Transfer 10000000000000000000 debt tokens to debt1Address - debt9Address
+var tokensToTransfer = 10000000000000000000
+function transferTokens(addr, tokens) {
+    var txOptions = {
+        nonce: web3Rinkeby.toHex(web3Rinkeby.eth.getTransactionCount(investorAddress)),
+        gasLimit: web3Rinkeby.toHex(1600000),
+        gasPrice: web3Rinkeby.toHex(20000000000),
+        to: smartBondContractInstance.address
+    }
+    var rawTx = txutils.functionTx(smartBondAbi, 'transfer', [addr, tokens], txOptions);
+    return sendRaw(rawTx, investorPrivateKey)
+}
+
+var numberOfAddresses = 99;
+function transferTokensToAddress(ind) {
+    var txHash = transferTokens(debtAddress[ind], tokensToTransfer)
+    waitForTransactionCompletion(txHash).
+    then(function(result) {
+        console.log(ind++);
+        if (ind < numberOfAddresses) {
+            return transferTokensToAddress(ind);
+        }
+    });
+}
+transferTokensToAddress(0);
+
+12) Check balance of debt tokens belonging to investorAddress, debt1Address - debt9Address
+smartBondContractInstance.balanceOf(investorAddress).toNumber()
+for (i = 0; i < numberOfAddresses; i++) {
+    console.log(i + ": " + smartBondContractInstance.balanceOf(debtAddress[i]).toNumber())
+}
+
+13) Check balance of bond issuer, investor, debt1Address - debt9Address and Smart Bond
+web3Rinkeby.eth.getBalance(bondIssuerAddress).toNumber()
+web3Rinkeby.eth.getBalance(investorAddress).toNumber()
+for (i = 0; i < numberOfAddresses; i++) {
+    console.log(i + ": " + web3Rinkeby.eth.getBalance(debtAddress[i]).toNumber())
+}
+web3Rinkeby.eth.getBalance(smartBondContractInstance.address).toNumber()
+
+14) Transfer full repayment + 100 GBP (1250 GBP * GBP rate in Wei) from bond issuer to Smart Bond
+Transfer using metamask
+
+web3Rinkeby.eth.getBalance(investorAddress).toNumber()
+web3Rinkeby.eth.getBalance(bondIssuerAddress).toNumber()
+
+15) Check balance of debt tokens belonging to investor, debt1Address - debt9Address
+smartBondContractInstance.balanceOf(investorAddress).toNumber()
+for (i = 0; i < numberOfAddresses; i++) {
+    console.log(i + ": " + smartBondContractInstance.balanceOf(debtAddress[i]).toNumber())
+}
+
+16) Check balance of bond issuer, investor, debt1Address - debt9Address and Smart Bond
+web3Rinkeby.eth.getBalance(bondIssuerAddress).toNumber()
+web3Rinkeby.eth.getBalance(investorAddress).toNumber()
+for (i = 0; i < numberOfAddresses; i++) {
+    console.log(i + ": " + web3Rinkeby.eth.getBalance(debtAddress[i]).toNumber())
+}
+web3Rinkeby.eth.getBalance(smartBondContractInstance.address).toNumber()

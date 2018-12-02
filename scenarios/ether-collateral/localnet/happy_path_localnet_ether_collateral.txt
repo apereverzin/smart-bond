@@ -1,0 +1,165 @@
+var Web3 = require('web3');
+var web3 = new Web3(new Web3.providers.HttpProvider("http://localhost:8545"))
+
+var bondIssuerAddress = '0xc0a862fbbc7d9396df9a923513b084c33499feee'
+var investorAddress = '0xcb68535e193f6cfca90213c3a13bc2519cf27f90'
+
+web3.personal.unlockAccount(investorAddress, '', 1500000)
+web3.personal.unlockAccount(bondIssuerAddress, '', 1500000)
+
+function waitForContractCreation(contract) {
+    var cnt = 0;
+    const interval = 500;
+    const numberOfIntervals = 1200;
+    const contractCreationAsync = function(resolve, reject) {
+        if (!contract.address) {
+            if (cnt > numberOfIntervals) {
+                reject('Timed out');
+            } else {
+                setTimeout(
+                    () => contractCreationAsync(resolve, reject), interval
+                );
+                cnt++;
+            }
+        } else {
+            resolve(contract.address);
+        }
+    };
+    return new Promise(contractCreationAsync);
+};
+
+function waitForTransactionCompletion(txHash) {
+    var cnt = 0;
+    const interval = 500;
+    const numberOfIntervals = 1200;
+    const transactionReceiptAsync = function(resolve, reject) {
+        web3.eth.getTransactionReceipt(txHash, (error, receipt) => {
+            if (error) {
+                reject(error);
+            } else if (receipt == null) {
+                setTimeout(
+                    () => transactionReceiptAsync(resolve, reject), interval
+                );
+            } else {
+                resolve(receipt);
+            }
+        });
+    };
+    return new Promise(transactionReceiptAsync);
+};
+
+Steps 1 - 2 are prerequisites and can be run just once
+1) Create Currency Rates Provider (local) and set GBP rate. Use CurrencyRatesLocal for local net, CurrencyRates for test or main net.
+// comment out the next line and uncomment the second next if oraclized provider is used
+var exchangeRatesAbiText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/SettableCurrencyRates.abi').toString()
+//var exchangeRatesAbiText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/CurrencyRatesLocal.abi').toString()
+
+var exchangeRatesAbi = JSON.parse(exchangeRatesAbiText)
+
+// comment out the next line and uncomment the second next if oraclized provider is used
+var exchangeRatesBytecodeText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/SettableCurrencyRates.bin').toString()
+//var exchangeRatesBytecodeText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/CurrencyRatesLocal.bin').toString()
+
+var exchangeRatesBytecode = '0x' + exchangeRatesBytecodeText
+var ExchangeRates = web3.eth.contract(exchangeRatesAbi)
+var exchangeRatesDeployedContract = ExchangeRates.new(360000, {data: exchangeRatesBytecode, from: bondIssuerAddress, gas: 4700000})
+
+var exchangeRatesContractInstance;
+waitForContractCreation(exchangeRatesDeployedContract).
+then(
+    function(result) {
+        exchangeRatesContractInstance = ExchangeRates.at(exchangeRatesDeployedContract.address)
+        console.log('Address: ' + result);
+        return waitForTransactionCompletion(exchangeRatesContractInstance.setCurrencyRate('GBP', 1000000000000000, {from: bondIssuerAddress, gas: 4700000}));
+    }
+).
+then(
+    function(result) {
+        var r = exchangeRatesContractInstance.getCurrencyRate('GBP').toNumber();
+        console.log('Rate: ' + r);
+    }
+)
+
+// this is applicable only to oraclized provider
+exchangeRatesContractInstance.update('GBP', {from: bondIssuerAddress, gas: 4700000, value: 10000000000000000})
+
+// this is applicable only to SettableCurrencyRates provider
+th = exchangeRatesContractInstance.setCurrencyRate('GBP', 1000000000000000, {from: bondIssuerAddress, gas: 4700000})
+web3.eth.getTransactionReceipt(th)
+
+exchangeRatesContractInstance.getCurrencyRate('GBP').toNumber()
+
+//2) Create Smart Bond Register
+var smartBondRegisterAbiText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/SmartBondRegister.abi').toString()
+var smartBondRegisterAbi = JSON.parse(smartBondRegisterAbiText)
+var smartBondRegisterBytecodeText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/SmartBondRegister.bin').toString()
+var smartBondRegisterBytecode = '0x' + smartBondRegisterBytecodeText
+var SmartBondRegister = web3.eth.contract(smartBondRegisterAbi)
+var smartBondRegisterDeployedContract = SmartBondRegister.new({data: smartBondRegisterBytecode, from: bondIssuerAddress, gas: 4712388})
+var smartBondRegisterContractInstance;
+waitForContractCreation(smartBondRegisterDeployedContract).
+then(
+    function(result) {
+        smartBondRegisterContractInstance = SmartBondRegister.at(smartBondRegisterDeployedContract.address)
+        console.log('Address: ' + result);
+    }, function(err) {
+        console.log(err);
+    }
+)
+
+3) Create Smart Bond
+var smartBondAbiText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/SmartBondEtherCollateral.abi').toString()
+var smartBondAbi = JSON.parse(smartBondAbiText)
+var smartBondBytecodeText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/SmartBondEtherCollateral.bin').toString()
+var smartBondBytecode = '0x' + smartBondBytecodeText
+var SmartBond = web3.eth.contract(smartBondAbi)
+var contractId = '1253'
+var smartBondDeployedContract = SmartBond.new(bondIssuerAddress, investorAddress,    'GBP', 1000,    3, 60, 50,    smartBondRegisterContractInstance.address, contractId,    exchangeRatesContractInstance.address,    'Smart Bond Token2', 'SBT2', 1000000000000000000, {data: smartBondBytecode, from: bondIssuerAddress, gas: 4712388})
+smartBondDeployedContract.address
+var smartBondContractInstance = SmartBond.at(smartBondDeployedContract.address)
+smartBondRegisterContractInstance.getSmartBond(contractId)
+smartBondContractInstance.minAmountOfCollateralWei().toNumber()
+smartBondContractInstance.balanceOf(smartBondContractInstance.address).toNumber()
+
+4) Update currency rate in the Currency Rates Provider
+
+5) Check balance of Smart Bond
+web3.eth.getBalance(smartBondContractInstance.address).toNumber()
+
+6) Update amount of collateral wei according current rate
+th = smartBondContractInstance.updateMinAmountOfCollateral({from: bondIssuerAddress, gas: 4700000})
+web3.eth.getTransactionReceipt(th)
+
+7) Transfer collateral (1000 GBP * GBP rate in Wei * 1.25) ether to Smart Bond
+var c = smartBondContractInstance.minAmountOfCollateralWei().toNumber()
+th = web3.eth.sendTransaction({value: c, from: bondIssuerAddress, to: smartBondContractInstance.address, gas: 4712388})
+web3.eth.getTransactionReceipt(th)
+
+8) Check balance of bond issuer and Smart Bond
+web3.eth.getBalance(bondIssuerAddress).toNumber()
+web3.eth.getBalance(smartBondContractInstance.address).toNumber()
+
+9) Transfer loan (1000 GBP) from investor to Smart Bond
+web3.eth.getBalance(investorAddress).toNumber()
+web3.eth.getBalance(bondIssuerAddress).toNumber()
+smartBondContractInstance.currencyRate().toNumber()
+var c1 = smartBondContractInstance.convertCurrencyToWei.call(1000, {from: bondIssuerAddress, gas: 4712388})[0].toNumber()
+th = web3.eth.sendTransaction({value: c1, from: investorAddress, to: smartBondContractInstance.address, gas: 4712388})
+web3.eth.getTransactionReceipt(th)
+
+10) Check balance of debt tokens belonging to investor
+smartBondContractInstance.balanceOf(smartBondContractInstance.investorAddress()).toNumber()
+
+11) Transfer full repayment + 100 GBP (1250) from bond issuer to Smart Bond
+var c2 = smartBondContractInstance.convertCurrencyToWei.call(1250, {from: bondIssuerAddress, gas: 4712388})[0].toNumber()
+th = web3.eth.sendTransaction({value: c2, from: bondIssuerAddress, to: smartBondContractInstance.address, gas: 4712388})
+web3.eth.getTransactionReceipt(th)
+web3.eth.getBalance(investorAddress).toNumber()
+web3.eth.getBalance(bondIssuerAddress).toNumber()
+
+12) Check balance of debt tokens belonging to investor
+smartBondContractInstance.balanceOf(smartBondContractInstance.investorAddress()).toNumber()
+
+13) Check balance of bond issuer and Smart Bond
+web3.eth.getBalance(bondIssuerAddress).toNumber()
+web3.eth.getBalance(smartBondContractInstance.address).toNumber()

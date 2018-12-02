@@ -1,0 +1,76 @@
+Ether Collateral:
+    // Attributes related to the loan
+    address public bondIssuerAddress;
+    address public investorAddress;
+    uint256 public bondFaceValueInCurrency;
+    string public currency;
+    CurrencyRatesProvider public currencyRatesProvider;
+    uint256 public currencyRateValidInSeconds;
+    uint256 public couponPaymentPeriodInSeconds;
+    uint256 public numberOfCouponPayments;
+    uint256 public couponPaymentInCurrency;
+    uint256 public totalAmountInCurrencyToRepay;
+    uint public contractStartTimeInSeconds;
+    //
+
+    // Attributes related to collateral
+    uint256 public collateralExtraValueRatio;
+    uint256 public minAmountOfCollateralWei;
+
+    // within this time investor should transfer loan to SME;
+    // collateral token should already be on the SmartBond account's balance;
+    // after this time if the loan is still not transferred
+    // SME can withdraw its collateral tokens from SmartBond account's balance
+    uint256 public loanTransferTimeoutInSeconds;
+    //
+
+    // Attributes related to wei transfers between investor and bondIssuer
+    uint256 public totalAmountInCurrencyRepaid;
+    AmountTransfer public collateralTransfer;
+    AmountTransfer public loanTransfer;
+    uint public repaymentCount = 0;
+    mapping (uint => AmountTransfer) public repaymentTransfers;
+    uint256 public currencyRate;
+    uint public currencyRateExpirationTimeInSeconds;
+    //
+
+    // Can be set to true only once
+    bool public isDefaulted = false;
+    //
+
+    // Attributes related ERC20
+    string public name;
+    string public symbol;
+    uint256 public totalNumberOfDebtTokens;
+    uint8 public constant decimals = 18;
+    mapping (address => uint256) public balances;
+    mapping (address => uint) public registeredDebtTokenHoldersAddresses;
+    mapping (uint => address) public indexedDebtTokenHoldersAddresses;
+    uint public debtTokenHoldersCount = 0;
+    //
+
+    // Attribute related to Smart Bond Register
+    SmartBondRegister public smartBondRegister;
+    uint256 public contractId;
+    //
+
+    function totalSupply() public view returns (uint256) {
+    function balanceOf(address _owner) constant public returns (uint256){
+    function transfer(address _to, uint256 _value) public returns (bool) {
+    function withdrawCollateralWei() external returns (bool) {
+    function convertCurrencyToWei(uint256 amountInCurrency) external
+    function updateMinAmountOfCollateral() external returns (bool) {
+    function setDefaultState() external returns (bool success) {
+    function getAmountToBeRepaidInCurrency() view public returns (uint) {
+    function getNumberOfExpiredCouponPayments() view public returns (uint) {
+
+    function updateCurrencyRateIfNecessary() internal returns (bool) {
+    function transferCollateralWeiFromBondIssuer(uint256 value) internal
+    function transferLoanToBondIssuer(uint256 value) internal
+    function repayLoanToInvestors(uint256 value) internal
+    function transferLoanToInvestor(address addr, uint256 value) internal {
+    function convertLoanToAmountWei() internal view returns (uint256) {
+    function distributeCollateral(uint256 valueToDistributeInWei) internal returns (bool) {
+    function transferCollateralToInvestor(address addr, uint256 value) internal {
+    function destroyDebtTokens() internal returns (bool) {
+    function registerBalance(address addr, uint256 balance) internal {

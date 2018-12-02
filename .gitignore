@@ -1,0 +1,5 @@
+.gitignore
+.idea/
+coverage/
+node_modules/
+smart-bond.iml

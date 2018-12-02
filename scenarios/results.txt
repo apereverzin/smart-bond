@@ -1,0 +1,22 @@
+Localnet:
+default 3 investors token collateral: gas 141459
+default 1 investor token collateral: gas 51269
+
+
+Rinkeby:
+happy path 3 investors ether collateral: gasUsed 144331, cumulativeGasUsed 166052
+happy path 9 investors ether collateral: gasUsed 336116, cumulativeGasUsed 429943
+happy path 9 investors ether collateral: gasUsed 177682, cumulativeGasUsed 5825845
+happy path 9 investors ether collateral: gasUsed 126248, cumulativeGasUsed 126248
+happy path 10 investors ether collateral: gasUsed 198774, cumulativeGasUsed 1998008
+happy path 19 investors ether collateral: gasUsed 519311, cumulativeGasUsed 1152116
+happy path 100 investors ether collateral: gasUsed 2709156, cumulativeGasUsed 2709156
+
+create Smart Bond: gas 2602993
+create Smart Bond: gas 2650199
+
+default 1 investor ether collateral: gas 64790
+default 3 investors ether collateral: gas 75764
+default 9 investors ether collateral: gas 121843
+default 20 investors ether collateral: gas 238902
+default 100 investors ether collateral: gas 1074485

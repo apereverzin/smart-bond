@@ -1,0 +1,68 @@
+var Web3 = require('web3');
+var web3 = new Web3(new Web3.providers.HttpProvider("http://localhost:8545"))
+
+var bondIssuerAddress = '0xc0a862fbbc7d9396df9a923513b084c33499feee'
+var investorAddress = '0xcb68535e193f6cfca90213c3a13bc2519cf27f90'
+
+web3.personal.unlockAccount(investorAddress, '', 1500000)
+web3.personal.unlockAccount(bondIssuerAddress, '', 1500000)
+
+function waitForContractCreation(contract) {
+    var cnt = 0;
+    const interval = 500;
+    const numberOfIntervals = 1200;
+    const contractCreationAsync = function(resolve, reject) {
+        if (!contract.address) {
+            if (cnt > numberOfIntervals) {
+                reject('Timed out');
+            } else {
+                setTimeout(
+                    () => contractCreationAsync(resolve, reject), interval
+                );
+                cnt++;
+            }
+        } else {
+            resolve(contract.address);
+        }
+    };
+    return new Promise(contractCreationAsync);
+};
+
+function waitForTransactionCompletion(txHash) {
+    var cnt = 0;
+    const interval = 500;
+    const numberOfIntervals = 1200;
+    const transactionReceiptAsync = function(resolve, reject) {
+        web3.eth.getTransactionReceipt(txHash, (error, receipt) => {
+            if (error) {
+                reject(error);
+            } else if (receipt == null) {
+                setTimeout(
+                    () => transactionReceiptAsync(resolve, reject), interval
+                );
+            } else {
+                resolve(receipt);
+            }
+        });
+    };
+    return new Promise(transactionReceiptAsync);
+};
+
+var msgDataTestAbiText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/MsgDataTest.abi').toString()
+
+var msgDataTestAbi = JSON.parse(msgDataTestAbiText)
+
+var msgDataTestBytecodeText = fs.readFileSync('/private/etc/Work1/ethereum/capexmove/Demo/smartbond-full/build/MsgDataTest.bin').toString()
+
+var msgDataTestBytecode = '0x' + msgDataTestBytecodeText
+var MsgDataTest = web3.eth.contract(msgDataTestAbi)
+var msgDataTestDeployedContract = MsgDataTest.new(360000, {data: msgDataTestBytecode, from: bondIssuerAddress, gas: 4700000})
+
+var msgDataTestContractInstance;
+waitForContractCreation(msgDataTestDeployedContract).
+then(
+    function(result) {
+        msgDataTestContractInstance = MsgDataTest.at(msgDataTestDeployedContract.address)
+        console.log('Address: ' + result);
+    }
+)
